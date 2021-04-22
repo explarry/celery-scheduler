@@ -1,3 +1,5 @@
+import fcntl
+import pickle
 import os
 import shelve
 import time
@@ -16,7 +18,92 @@ class Changes(object):
     _retry = 10
     _interval = 0.01
     _changes_file_path = os.path.join(current_dir, 'celerybeat-changes')
+    
+    @staticmethod
+    def _get_task_name(task):
+        task_name = task.get('name') or task['task']
+        if not isinstance(task['task'], str):
+            raise KeyError('value of key task must be string')
+        return task_name
 
+    def _open(self):
+        raise NotImplemented
+
+    def _close(self):
+        raise NotImplemented
+
+    def _try_open(self):
+        raise NotImplemented
+
+    def add_task(self, task):
+        raise NotImplemented
+
+    def delete_task(self, task_name):
+        raise NotImplemented
+
+    def update_task(self, task):
+        self.add_task(task)
+
+    def get_and_clear_operations(self):
+        raise NotImplemented
+
+
+class FileChanges(Changes):
+    def _open(self):
+        self._changes = open(self._changes_file_path, 'ab+')
+        fcntl.flock(self._changes, fcntl.LOCK_EX)
+
+    def _close(self):
+        if hasattr(self, '_changes'):
+            fcntl.flock(self._changes.fileno(), fcntl.LOCK_UN)
+            self._changes.close()
+
+    def _try_open(self):
+        try:
+            self._open()
+        except OSError as exc:
+            logger.error('try open failed<==%s', exc)
+            return False
+        else:
+            return True
+
+    def add_task(self, task):
+        self._open()
+        task_name = self._get_task_name(task)
+        self._changes.write(b'%s,%s,%s\n' % (b'add', task_name.encode(), pickle.dumps(task)))
+        self._close()
+        logger.info(f'add task, task={task}')
+
+    def delete_task(self, task_name):
+        self._open()
+        self._changes.write(b'%s,%s,%s\n' % (b'delete', task_name.encode(), b'null'))
+        self._close()
+        logger.info(f'delete task, task_name={task_name}')
+
+    def get_and_clear_operations(self):
+        self._open()
+        self._changes.seek(0)
+        operations = []
+        for line in self._changes:
+            operation = line.strip().split(b',')
+            if operation[0] == b'add':
+                operation[0] = 'add'
+                operation[1] = operation[1].decode()
+                operation[2] = pickle.loads(operation[2])
+            elif operation[0] == b'delete':
+                operation[0] = 'delete'
+                operation[1] = operation[1].decode()
+                operation[2] = None
+            else:
+                continue
+            operations.append(operation)
+        self._changes.seek(0)
+        self._changes.truncate()
+        self._close()
+        return operations
+
+
+class ShelveChanges(Changes):
     def _open(self):
         self._changes = shelve.open(self._changes_file_path, writeback=True)
 
@@ -38,13 +125,6 @@ class Changes(object):
         logger.error('try open failed for 10 consecutive times, stop trying')
         return False
 
-    @staticmethod
-    def _get_task_name(task):
-        task_name = task.get('name') or task['task']
-        if not isinstance(task['task'], str):
-            raise KeyError('value of key task must be string')
-        return task_name
-
     def add_task(self, task):
         self._open()
         self._changes.setdefault('operations', [])
@@ -60,9 +140,6 @@ class Changes(object):
         self._close()
         logger.info(f'delete task, task_name={task_name}')
 
-    def update_task(self, task):
-        self.add_task(task)
-
     def get_and_clear_operations(self):
         if not self._try_open():
             return []
@@ -74,7 +151,7 @@ class Changes(object):
 
 class FileScheduler(PersistentScheduler):
     sync_every = 10
-    changes_class = Changes
+    changes_class = ShelveChanges
 
     def __init__(self, *args, **kwargs):
         self.changes = self.changes_class()
