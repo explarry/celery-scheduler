@@ -33,7 +33,18 @@ class Changes(object):
         raise NotImplemented
 
     def _try_open(self):
-        raise NotImplemented
+        for _ in range(self._retry):
+            try:
+                self._close()
+                self._open()
+            except IOError as exc:
+                logger.warning('try open failed<==%s', exc)
+                time.sleep(self._interval)
+                continue
+            else:
+                return True
+        logger.error('try open failed for %s consecutive times, stop trying', self._retry)
+        return False
 
     def add_task(self, task):
         raise NotImplemented
@@ -51,21 +62,12 @@ class Changes(object):
 class FileChanges(Changes):
     def _open(self):
         self._changes = open(self._changes_file_path, 'ab+')
-        fcntl.flock(self._changes, fcntl.LOCK_EX)
+        fcntl.flock(self._changes, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def _close(self):
         if hasattr(self, '_changes'):
             fcntl.flock(self._changes.fileno(), fcntl.LOCK_UN)
             self._changes.close()
-
-    def _try_open(self):
-        try:
-            self._open()
-        except OSError as exc:
-            logger.error('try open failed<==%s', exc)
-            return False
-        else:
-            return True
 
     def add_task(self, task):
         self._open()
@@ -111,20 +113,6 @@ class ShelveChanges(Changes):
         if hasattr(self, '_changes'):
             self._changes.close()
 
-    def _try_open(self):
-        for _ in range(self._retry):
-            try:
-                self._close()
-                self._open()
-            except IOError as exc:
-                logger.warning('try open failed<==%s', exc)
-                time.sleep(self._interval)
-                continue
-            else:
-                return True
-        logger.error('try open failed for 10 consecutive times, stop trying')
-        return False
-
     def add_task(self, task):
         self._open()
         self._changes.setdefault('operations', [])
@@ -149,9 +137,9 @@ class ShelveChanges(Changes):
         return operations
 
 
-class FileScheduler(PersistentScheduler):
+class Scheduler(PersistentScheduler):
     sync_every = 10
-    changes_class = ShelveChanges
+    changes_class = Changes
 
     def __init__(self, *args, **kwargs):
         self.changes = self.changes_class()
@@ -169,4 +157,12 @@ class FileScheduler(PersistentScheduler):
             elif operation == 'delete':
                 del self._store['entries'][task_name]
         self._store.sync()
+
+
+class FileScheduler(Scheduler):
+    changes_class = FileChanges
+
+
+class ShelveScheduler(Scheduler):
+    changes_class = ShelveChanges
 
