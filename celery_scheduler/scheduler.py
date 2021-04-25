@@ -7,6 +7,7 @@ import time
 
 from celery.beat import PersistentScheduler, ScheduleEntry
 from celery.utils.log import get_logger
+from typing import List, Dict
 
 
 logger = get_logger(__name__)
@@ -20,7 +21,7 @@ class Changes(object):
     _changes_file_path = os.path.join(current_dir, 'celerybeat-changes')
     
     @staticmethod
-    def _get_task_name(task):
+    def _get_task_name(task: Dict) -> str:
         task_name = task.get('name') or task['task']
         if not isinstance(task['task'], str):
             raise KeyError('value of key task must be string')
@@ -46,16 +47,16 @@ class Changes(object):
         logger.error('try open failed for %s consecutive times, stop trying', self._retry)
         return False
 
-    def add_task(self, task):
+    def add_task(self, task: Dict):
         raise NotImplemented
 
-    def delete_task(self, task_name):
+    def delete_task(self, task_name: str):
         raise NotImplemented
 
-    def update_task(self, task):
+    def update_task(self, task: Dict):
         self.add_task(task)
 
-    def get_and_clear_operations(self):
+    def get_and_clear_operations(self) -> List:
         raise NotImplemented
 
 
@@ -69,20 +70,20 @@ class FileChanges(Changes):
             fcntl.flock(self._changes.fileno(), fcntl.LOCK_UN)
             self._changes.close()
 
-    def add_task(self, task):
+    def add_task(self, task: Dict):
         self._open()
         task_name = self._get_task_name(task)
         self._changes.write(b'%s,%s,%s\n' % (b'add', task_name.encode(), pickle.dumps(task)))
         self._close()
         logger.info(f'add task, task={task}')
 
-    def delete_task(self, task_name):
+    def delete_task(self, task_name: str):
         self._open()
         self._changes.write(b'%s,%s,%s\n' % (b'delete', task_name.encode(), b'null'))
         self._close()
         logger.info(f'delete task, task_name={task_name}')
 
-    def get_and_clear_operations(self):
+    def get_and_clear_operations(self) -> List:
         self._open()
         self._changes.seek(0)
         operations = []
@@ -113,7 +114,7 @@ class ShelveChanges(Changes):
         if hasattr(self, '_changes'):
             self._changes.close()
 
-    def add_task(self, task):
+    def add_task(self, task: Dict):
         self._open()
         self._changes.setdefault('operations', [])
         task_name = self._get_task_name(task)
@@ -121,14 +122,14 @@ class ShelveChanges(Changes):
         self._close()
         logger.info(f'add task, task={task}')
 
-    def delete_task(self, task_name):
+    def delete_task(self, task_name: str):
         self._open()
         self._changes.setdefault('operations', [])
         self._changes['operations'].append(('delete', task_name, None))
         self._close()
         logger.info(f'delete task, task_name={task_name}')
 
-    def get_and_clear_operations(self):
+    def get_and_clear_operations(self) -> List:
         if not self._try_open():
             return []
         operations = self._changes.get('operations', [])
