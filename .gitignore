@@ -1,0 +1,3 @@
+MANIFEST
+celery_scheduler/celerybeat-changes
+dist/
