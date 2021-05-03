@@ -139,6 +139,7 @@ class ShelveChanges(Changes):
 
 
 class Scheduler(PersistentScheduler):
+    max_interval = 10
     sync_every = 10
     changes_class = Changes
 

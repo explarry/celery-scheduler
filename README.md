@@ -10,17 +10,17 @@ pass
 
 ## Usage
 
-1. run celery beat with `--scheduler` and `--max-interval` options, for example,
+1. run celery beat with `--scheduler`, for example,
 
 ```shell
-celery -A tasks beat --scheduler celery_scheduler.scheduler.ShelveScheduler --max-interval 10
+celery -A tasks beat --scheduler celery_scheduler.ShelveScheduler
 ```
 
 2. dynamic config in python shell, for example,
 
 ```python
 from celery.schedules import crontab
-from celery_scheduler.scheduler import ShelveChanges
+from celery_scheduler import ShelveChanges
 
 # add a beat task entry
 ShelveChanges().add_task({'name': 'custom_backend_cleanup', 'task': 'celery.backend_cleanup', 'schedule': 15})
@@ -34,6 +34,6 @@ ShelveChanges().delete_task('custom_backend_cleanup')
 
 3. available scheduler and changes
 
-* `FileScheduler` and `FileChanges`
-* `ShelveScheduler` and `ShelveChanges`
+* `celery_scheduler.FileScheduler` and `celery_scheduler.FileChanges`
+* `celery_scheduler.ShelveScheduler` and `celery_scheduler.ShelveChanges`
 
