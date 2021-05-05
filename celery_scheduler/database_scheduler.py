@@ -18,14 +18,52 @@ logger = get_logger(__name__)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-class DatabaseScheduler(Scheduler):
+class DatabaseChanges(object):
     _schedule_uri = 'sqlite:///%s' % os.path.join(current_dir, 'celerybeat-schedule.db')
-    sync_every = 10
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         self.engine = create_engine(self._schedule_uri)
         self.Session = sessionmaker(self.engine)
         self.session = self.Session()
+
+    @staticmethod
+    def _get_task_name(task: Dict) -> str:
+        task_name = task.get('name') or task['task']
+        if not isinstance(task['task'], str):
+            raise KeyError('value of key task must be string')
+        return task_name
+
+    def add_task(self, task: Dict):
+        task_name = self._get_task_name(task)
+        row = self.session.query(TaskEntry).filter_by(name=task_name).first() or TaskEntry()
+        row.name = task_name
+        row.task = task['task']
+        row.args = task.get('args', [])
+        row.kwargs = task.get('kwargs', {})
+        row.options = task.get('options', {})
+        row.schedule = self._serialize_schedule(taskr['schedule'])
+        self.session.merge(row)
+        self.session.commit()
+        logger.info(f'add task, task={task}')
+
+    def delete_task(self, task_name: str):
+        self.session.query(TaskEntry).filter_by(name=task_name).delete()
+        self.session.commit()
+        logger.info(f'delete task, task_name={task_name}')
+
+    def update_task(self, task: Dict):
+        self.add_task(task)
+
+
+class DatabaseScheduler(Scheduler):
+    changes_class = DatabaseChanges
+    max_interval = 10
+    sync_every = 10
+
+    def __init__(self, *args, **kwargs):
+        self.changes = self.changes_class()
+        self.engine = self.changes.engine
+        self.session = self.changes.session
         Scheduler.__init__(self, *args, **kwargs)
 
     def _create_table(self):
@@ -93,7 +131,7 @@ class DatabaseScheduler(Scheduler):
         logger.info('self.schedule=%s', self.schedule)
         for name, entry in self.schedule.items():
             logger.info('entry.schedule=%s', entry.schedule)
-            row = self.session.query(TaskEntry).filter_by(task=name).first() or TaskEntry()
+            row = self.session.query(TaskEntry).filter_by(name=name).first() or TaskEntry()
             row.name = name
             row.task = entry.task
             row.args = entry.args
@@ -103,7 +141,7 @@ class DatabaseScheduler(Scheduler):
             row.last_run_at = entry.last_run_at
             row.total_run_count = entry.total_run_count
             self.session.merge(row)
-            # cnt = self.session.query(TaskEntry).filter_by(task=entry.name).count()
+            # cnt = self.session.query(TaskEntry).filter_by(name=entry.name).count()
             # if cnt == 0:
             #     self.session.add(TaskEntry(
             #         name=entry.name,
@@ -116,7 +154,7 @@ class DatabaseScheduler(Scheduler):
             #         total_run_count = entry.total_run_count,
             #     ))
             # else:
-            #     self.session.query(TaskEntry).filter_by(task=entry.name).update(dict(
+            #     self.session.query(TaskEntry).filter_by(name=entry.name).update(dict(
             #         task=entry.task,
             #         args=entry.args,
             #         kwargs=entry.args,
