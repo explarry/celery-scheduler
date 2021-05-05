@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 celery = "*"
 redis = "*"
+sqlalchemy = "*"
+ephem = "*"
 
 [dev-packages]
 

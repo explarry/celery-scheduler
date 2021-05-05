@@ -1,5 +1,6 @@
 from .scheduler import FileScheduler, ShelveScheduler
 from .scheduler import FileChanges, ShelveChanges
+from .database_scheduler import DatabaseScheduler
 
 
 all = (
@@ -7,5 +8,6 @@ all = (
     ShelveScheduler,
     FileChanges,
     ShelveChanges,
+    DatabaseScheduler,
 )
 

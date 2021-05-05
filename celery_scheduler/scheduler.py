@@ -12,7 +12,6 @@ from typing import List, Dict
 
 logger = get_logger(__name__)
 current_dir = os.path.dirname(os.path.abspath(__file__))
-changes_file_path = os.path.join(current_dir, 'celerybeat-changes')
 
 
 class Changes(object):
