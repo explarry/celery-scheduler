@@ -65,10 +65,11 @@ def _deserialize_schedule(schedule: Any):
 
 
 class DatabaseChanges(object):
-    _schedule_uri = 'sqlite:///%s' % os.path.join(current_dir, 'celerybeat-schedule.db')
+    _database_uri = 'sqlite:///%s' % os.path.join(current_dir, 'celerybeat-schedule.db')
 
-    def __init__(self):
-        self.engine = create_engine(self._schedule_uri)
+    def __init__(self, database_uri: str = None):
+        self._database_uri = database_uri or self._database_uri
+        self.engine = create_engine(self._database_uri)
         self.Session = sessionmaker(self.engine)
         self.session = self.Session()
 
@@ -111,7 +112,12 @@ class DatabaseScheduler(Scheduler):
     sync_every = 10
 
     def __init__(self, *args, **kwargs):
-        self.changes = self.changes_class()
+        if len(args) == 0:
+            app = kwargs['app']
+        else:
+            assert len(args) == 1
+            app = args[0]
+        self.changes = self.changes_class(app.conf.get('database_uri'))
         self.session = self.changes.session
         Scheduler.__init__(self, *args, **kwargs)
 
@@ -152,22 +158,22 @@ class DatabaseScheduler(Scheduler):
         self._write_schedule_to_table()
 
     def sync(self):
-        logger.info('sync started')
+        logger.debug('sync started')
         try:
             persistent_data = self._read_schedule_from_table()
             self.merge_inplace(persistent_data)
             self._write_schedule_to_table()
         except BaseException as exc:
             self.session.rollback()
-            logger.info('sync failed<==%s', exc)
+            logger.warning('sync failed<==%s', exc)
         else:
             self.session.commit()
-        logger.info('sync finished')
+        logger.debug('sync finished')
 
     def close(self):
         self.session.close()
 
     @property
     def info(self):
-        return '    . db -> %s' % self.changes._schedule_uri
+        return '    . db -> %s' % self.changes._database_uri
 
