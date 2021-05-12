@@ -19,3 +19,20 @@ class TaskEntry(Base):
     last_run_at = Column(DateTime, default=datetime.now)
     total_run_count = Column(Integer)
 
+
+class TaskChange(Base):
+    """
+    operation is limited to 'add', 'delete', 'update'
+    """
+
+    __tablename__ = 'task_entry_change'
+
+    id = Column(Integer, primary_key=True)
+    operation = Column(String, nullable=False)
+    name = Column(String, unique=True, nullable=False)
+    task = Column(String)
+    args = Column(JSON, default=[])
+    kwargs = Column(JSON, default={})
+    options = Column(JSON, default={})
+    schedule = Column(JSON, default={})
+
