@@ -40,7 +40,7 @@ ShelveChanges().delete_task('custom_backend_cleanup')
 
 * `celery_scheduler.DatabaseScheduler` and `celery_scheduler.DatabaseChanges`
 
-  1. default database uri is `sqlite:////[path to celery_scheduler module]/celerybeat-schedule.db`
+  1. default database uri is `sqlite:////[path to celery_scheduler module]/celerybeat-schedule`
 
   2. for `DatabaseScheduler`, specify database_uri before starting celery beat, for example,
 

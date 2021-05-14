@@ -65,7 +65,7 @@ def _deserialize_schedule(schedule: Any):
 
 
 class DatabaseChanges(object):
-    _database_uri = 'sqlite:///%s' % os.path.join(current_dir, 'celerybeat-schedule.db')
+    _database_uri = 'sqlite:///%s' % os.path.join(current_dir, 'celerybeat-schedule')
 
     def __init__(self, database_uri: str = None):
         self._database_uri = database_uri or self._database_uri
