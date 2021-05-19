@@ -98,8 +98,10 @@ class DatabaseChanges(object):
         logger.info(f'add task, task={task}')
 
     def delete_task(self, task_name: str):
-        self.session.query(TaskEntry).filter_by(name=task_name).delete()
-        self.session.commit()
+        task = self.session.query(TaskEntry).filter_by(name=task_name).first()
+        if task is not None:
+            self.session.delete(task)
+            self.session.commit()
         logger.info(f'delete task, task_name={task_name}')
 
     def update_task(self, task: Dict):
